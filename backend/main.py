@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 import pdfplumber
 import google.generativeai as genai
 import json
+import os
 from datetime import datetime
 
 from database import engine, get_db
@@ -24,7 +25,7 @@ app.add_middleware(
 )
 
 # ⚠️ IMPORTANTE: Reemplaza con tu API key de Gemini
-GEMINI_API_KEY = "AIzaSyBLp9SVFfuNzcLJ1bMmwGwU9MXeFWa4LLk"
+GEMINI_API_KEY = ""
 genai.configure(api_key=GEMINI_API_KEY)
 
 def detect_document_type(text: str) -> str:
