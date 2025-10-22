@@ -1,10 +1,9 @@
-from fastapi import FastAPI, UploadFile, File, Depends
+from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session
+import pdfplumber
 import google.generativeai as genai
 import json
 import os
-from datetime import datetime
 
 from database import engine, get_db
 import models
