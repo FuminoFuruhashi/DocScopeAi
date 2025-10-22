@@ -5,36 +5,31 @@ import google.generativeai as genai
 import json
 import os
 
-from database import engine, get_db
-import models
-
-# Crear las tablas en la base de datos
-models.Base.metadata.create_all(bind=engine)
-
 app = FastAPI()
 
 # Configurar CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["*"],  # Aceptar desde cualquier origen (cambia después a tu dominio)
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ⚠️ IMPORTANTE: Reemplaza con tu API key de Gemini
-GEMINI_API_KEY = ""
+# API Key desde variable de entorno
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 genai.configure(api_key=GEMINI_API_KEY)
 
 def detect_document_type(text: str) -> str:
     """Detecta el tipo de documento basándose en palabras clave"""
     text_lower = text.lower()
     
-    # Palabras clave para cada tipo
     if any(word in text_lower for word in ['abstract', 'methodology', 'referencias', 'bibliografía', 'doi', 'issn', 'journal']):
         return 'articulo_cientifico'
     elif any(word in text_lower for word in ['tarea', 'ensayo', 'trabajo', 'universidad', 'profesor', 'alumno', 'matrícula', 'carrera']):
         return 'trabajo_academico'
+    elif any(word in text_lower for word in ['contrato', 'arrendamiento', 'cláusula', 'partes', 'obligaciones', 'términos y condiciones', 'vigencia', 'rescisión']):
+        return 'contrato'
     elif any(word in text_lower for word in ['factura', 'ticket', 'recibo', 'rfc', 'subtotal', 'iva', 'total', 'comprobante']):
         return 'documento_financiero'
     else:
@@ -42,8 +37,6 @@ def detect_document_type(text: str) -> str:
 
 def get_specialized_prompt(doc_type: str, text: str) -> str:
     """Genera un prompt especializado según el tipo de documento"""
-
-    
     
     if doc_type == 'articulo_cientifico':
         return f"""
@@ -62,13 +55,13 @@ Analiza este artículo científico y extrae la siguiente información en formato
   "referencias_count": "número aproximado de referencias bibliográficas",
   "revista_journal": "nombre de la revista o journal si aplica",
   "doi": "DOI si está presente",
-  "resumen": "resumen ejecutivo del artículo en 2-3 líneas"
+  "resumen": "RESUMEN EJECUTIVO DETALLADO del artículo de 4-6 líneas que incluya: objetivo del estudio, metodología empleada, principales hallazgos y conclusiones"
 }}
 
 Si algún campo no está presente, usa null.
 
 DOCUMENTO:
-{text[:4000]}
+{text[:8000]}
 """
     
     elif doc_type == 'trabajo_academico':
@@ -89,14 +82,72 @@ Analiza este trabajo académico (tarea, ensayo o proyecto) y extrae la siguiente
   "objetivos": "objetivos del trabajo",
   "palabras_clave": ["conceptos", "clave"],
   "tipo_trabajo": "tipo (tarea, ensayo, proyecto, investigación, etc.)",
-  "resumen": "resumen del contenido en 2-3 líneas"
+  "resumen": "RESUMEN EJECUTIVO DETALLADO del trabajo de 4-6 líneas que incluya: tema principal, objetivos, desarrollo y conclusiones principales"
 }}
 
 Si algún campo no está presente, usa null.
 Para múltiples autores o matrículas, usa arrays.
 
 DOCUMENTO:
-{text[:4000]}
+{text[:8000]}
+"""
+    
+    elif doc_type == 'contrato':
+        return f"""
+Analiza DETALLADAMENTE este contrato legal y extrae toda la información relevante en formato JSON.
+IMPORTANTE: Sé exhaustivo y específico en tu análisis.
+
+{{
+  "tipo_documento": "contrato",
+  "tipo_contrato": "tipo específico (arrendamiento, compraventa, prestación de servicios, laboral, etc.)",
+  "fecha": "fecha de firma o emisión del contrato",
+  "vigencia_inicio": "fecha de inicio de vigencia",
+  "vigencia_fin": "fecha de término o duración",
+  "partes": {{
+    "parte_a": {{
+      "nombre": "nombre completo de la primera parte",
+      "tipo": "rol (propietario/arrendador/empleador/prestador de servicios/etc.)",
+      "identificacion": "RFC, CURP o identificación fiscal",
+      "domicilio": "domicilio si está presente"
+    }},
+    "parte_b": {{
+      "nombre": "nombre completo de la segunda parte",
+      "tipo": "rol (inquilino/arrendatario/empleado/cliente/etc.)",
+      "identificacion": "RFC, CURP o identificación fiscal",
+      "domicilio": "domicilio si está presente"
+    }}
+  }},
+  "objeto_contrato": "descripción DETALLADA del objeto o propósito del contrato",
+  "monto": "monto principal (renta, precio, salario, etc.)",
+  "moneda": "moneda",
+  "periodicidad_pago": "periodicidad de pago",
+  "forma_pago": "forma de pago especificada",
+  "clausulas_importantes": [
+    {{
+      "numero": "número de cláusula",
+      "titulo": "título o tema de la cláusula",
+      "contenido": "resumen del contenido de la cláusula"
+    }}
+  ],
+  "obligaciones_parte_a": ["lista", "DETALLADA", "de", "obligaciones"],
+  "obligaciones_parte_b": ["lista", "DETALLADA", "de", "obligaciones"],
+  "derechos_parte_a": ["derechos", "de", "la", "primera", "parte"],
+  "derechos_parte_b": ["derechos", "de", "la", "segunda", "parte"],
+  "condiciones_rescision": "condiciones ESPECÍFICAS para terminar anticipadamente",
+  "penalizaciones": "penalizaciones, multas o sanciones por incumplimiento",
+  "garantias": "garantías o avales requeridos",
+  "jurisdiccion": "jurisdicción o fuero aplicable para controversias",
+  "condiciones_especiales": ["cualquier", "condición", "especial"],
+  "lugar_firma": "lugar donde se firma",
+  "testigos": ["nombres", "de", "testigos"],
+  "resumen": "RESUMEN EJECUTIVO DETALLADO del contrato de 4-6 líneas que incluya: propósito principal, partes involucradas, montos clave, vigencia, y obligaciones principales"
+}}
+
+Si algún campo no está presente, usa null.
+Sé lo más exhaustivo y detallado posible.
+
+DOCUMENTO COMPLETO:
+{text[:8000]}
 """
     
     elif doc_type == 'documento_financiero':
@@ -117,14 +168,13 @@ Analiza este documento financiero y extrae la siguiente información en formato 
   "iva": "IVA o impuestos",
   "forma_pago": "forma de pago si está especificada",
   "folio": "número de folio o referencia",
-  "resumen": "resumen breve del documento en 1-2 líneas"
+  "resumen": "RESUMEN DETALLADO del documento de 3-4 líneas que incluya: tipo de transacción, monto total, emisor/receptor y conceptos principales"
 }}
-
 
 Si algún campo no está presente, usa null.
 
 DOCUMENTO:
-{text[:3000]}
+{text[:8000]}
 """
     
     else:  # general
@@ -142,11 +192,15 @@ Analiza este documento y extrae la información más relevante en formato JSON:
 }}
 
 DOCUMENTO:
-{text[:3000]}
+{text[:8000]}
 """
 
+@app.get("/")
+def read_root():
+    return {"message": "DocScope AI Backend - Ready! 🚀"}
+
 @app.post("/upload")
-async def upload_pdf(file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def upload_pdf(file: UploadFile = File(...)):
     try:
         # 1. Extraer texto del PDF
         with pdfplumber.open(file.file) as pdf:
@@ -171,7 +225,7 @@ async def upload_pdf(file: UploadFile = File(...), db: Session = Depends(get_db)
         }
 
         model = genai.GenerativeModel(
-            'gemini-2.5-pro',
+            'gemini-2.0-flash-exp',
             generation_config=generation_config
         )
         
@@ -186,142 +240,18 @@ async def upload_pdf(file: UploadFile = File(...), db: Session = Depends(get_db)
         
         analysis = json.loads(ai_text.strip())
         
-        # 5. Guardar en la base de datos
-        new_document = models.Document(
-            filename=file.filename,
-            pages=num_pages,
-            text_preview=full_text[:500],
-            tipo_documento=analysis.get("tipo_documento"),
-            fecha=analysis.get("fecha"),
-            emisor=json.dumps(analysis.get("emisor") or analysis.get("autores")) if (analysis.get("emisor") or analysis.get("autores")) else None,
-            receptor=analysis.get("receptor"),
-            total=analysis.get("total"),
-            moneda=analysis.get("moneda"),
-            rfc_emisor=analysis.get("rfc_emisor"),
-            conceptos=json.dumps(analysis.get("conceptos") or analysis.get("palabras_clave")) if (analysis.get("conceptos") or analysis.get("palabras_clave")) else None,
-            subtotal=analysis.get("subtotal"),
-            iva=analysis.get("iva"),
-            resumen=analysis.get("resumen")
-        )
-        
-        db.add(new_document)
-        db.commit()
-        db.refresh(new_document)
-        
         return {
             "filename": file.filename,
             "pages": num_pages,
             "text_preview": full_text[:500],
             "analysis": analysis,
             "detected_type": doc_type,
-            "success": True,
-            "document_id": new_document.id
+            "success": True
         }
         
     except Exception as e:
         return {
             "error": str(e),
-            "filename": file.filename,
+            "filename": file.filename if file else "unknown",
             "success": False
         }
-
-@app.get("/documents")
-def get_documents(db: Session = Depends(get_db)):
-    """Obtener todos los documentos analizados"""
-    documents = db.query(models.Document).order_by(models.Document.created_at.desc()).all()
-    
-    result = []
-    for doc in documents:
-        result.append({
-            "id": doc.id,
-            "filename": doc.filename,
-            "pages": doc.pages,
-            "tipo_documento": doc.tipo_documento,
-            "fecha": doc.fecha,
-            "emisor": json.loads(doc.emisor) if doc.emisor else None,
-            "receptor": doc.receptor,
-            "total": doc.total,
-            "moneda": doc.moneda,
-            "rfc_emisor": doc.rfc_emisor,
-            "conceptos": json.loads(doc.conceptos) if doc.conceptos else None,
-            "subtotal": doc.subtotal,
-            "iva": doc.iva,
-            "resumen": doc.resumen,
-            "created_at": doc.created_at.isoformat()
-        })
-    
-    return {"documents": result, "total": len(result)}
-
-@app.get("/documents/{document_id}")
-def get_document(document_id: int, db: Session = Depends(get_db)):
-    """Obtener un documento específico por ID"""
-    doc = db.query(models.Document).filter(models.Document.id == document_id).first()
-    
-    if not doc:
-        return {"error": "Documento no encontrado"}
-    
-    return {
-        "id": doc.id,
-        "filename": doc.filename,
-        "pages": doc.pages,
-        "text_preview": doc.text_preview,
-        "tipo_documento": doc.tipo_documento,
-        "fecha": doc.fecha,
-        "emisor": json.loads(doc.emisor) if doc.emisor else None,
-        "receptor": doc.receptor,
-        "total": doc.total,
-        "moneda": doc.moneda,
-        "rfc_emisor": doc.rfc_emisor,
-        "conceptos": json.loads(doc.conceptos) if doc.conceptos else None,
-        "subtotal": doc.subtotal,
-        "iva": doc.iva,
-        "resumen": doc.resumen,
-        "created_at": doc.created_at.isoformat()
-    }
-
-@app.delete("/documents/{document_id}")
-def delete_document(document_id: int, db: Session = Depends(get_db)):
-    """Eliminar un documento"""
-    doc = db.query(models.Document).filter(models.Document.id == document_id).first()
-    
-    if not doc:
-        return {"error": "Documento no encontrado"}
-    
-    db.delete(doc)
-    db.commit()
-    
-    return {"message": "Documento eliminado", "success": True}
-
-@app.get("/stats")
-def get_stats(db: Session = Depends(get_db)):
-    """Obtener estadísticas generales"""
-    total_docs = db.query(models.Document).count()
-    
-    # Contar por tipo de documento
-    tipos = db.query(models.Document.tipo_documento).all()
-    tipos_count = {}
-    for tipo in tipos:
-        if tipo[0]:
-            tipos_count[tipo[0]] = tipos_count.get(tipo[0], 0) + 1
-    
-    # Calcular total de gastos (solo documentos con total numérico)
-    total_gastos = 0
-    docs_con_total = db.query(models.Document.total, models.Document.moneda).filter(
-        models.Document.total.isnot(None)
-    ).all()
-    
-    for total, moneda in docs_con_total:
-        try:
-            # Intentar convertir a número
-            valor = float(total.replace(',', ''))
-            if moneda in ['MXN', 'USD', '$']:
-                total_gastos += valor
-        except:
-            pass
-    
-    return {
-        "total_documents": total_docs,
-        "document_types": tipos_count,
-        "total_expenses": round(total_gastos, 2),
-        "currency": "MXN"
-    }
