@@ -72,36 +72,40 @@ export default function Dashboard() {
   }, []);
 
   const fetchData = async () => {
-    try {
-      const [docsRes, statsRes] = await Promise.all([
-        fetch('http://127.0.0.1:8000/documents'),
-        fetch('http://127.0.0.1:8000/stats')
-      ]);
+  try {
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+    
+    const [docsRes, statsRes] = await Promise.all([
+      fetch(`${API_URL}/documents`),
+      fetch(`${API_URL}/stats`)
+    ]);
 
-      const docsData = await docsRes.json();
-      const statsData = await statsRes.json();
+    const docsData = await docsRes.json();
+    const statsData = await statsRes.json();
 
-      setDocuments(docsData.documents || []);
-      setStats(statsData);
-    } catch (error) {
-      console.error('Error fetching data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    setDocuments(docsData.documents || []);
+    setStats(statsData);
+  } catch (error) {
+    console.error('Error fetching data:', error);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const deleteDocument = async (id: number) => {
-    if (!confirm('¿Estás seguro de eliminar este documento?')) return;
+  if (!confirm('¿Estás seguro de eliminar este documento?')) return;
 
-    try {
-      await fetch(`http://127.0.0.1:8000/documents/${id}`, {
-        method: 'DELETE'
-      });
-      fetchData();
-    } catch (error) {
-      console.error('Error deleting document:', error);
-    }
-  };
+  try {
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+    
+    await fetch(`${API_URL}/documents/${id}`, {
+      method: 'DELETE'
+    });
+    fetchData();
+  } catch (error) {
+    console.error('Error deleting document:', error);
+  }
+};
 
   const filteredDocuments = documents.filter(doc => {
     const matchesSearch = doc.filename.toLowerCase().includes(searchTerm.toLowerCase()) ||

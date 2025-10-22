@@ -65,50 +65,51 @@ export default function DocScopeAI() {
     }
   };
 
-  const analyzeDocument = async (file: File) => {
-    setAnalyzing(true);
-    setResults(null);
+const analyzeDocument = async (file: File) => {
+  setAnalyzing(true);
+  setResults(null);
 
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
+  try {
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+    
+    const formData = new FormData();
+    formData.append('file', file);
 
-      const response = await fetch('http://127.0.0.1:8000/upload', {
-        method: 'POST',
-        body: formData,
-      });
+    const response = await fetch(`${API_URL}/upload`, {
+      method: 'POST',
+      body: formData,
+    });
 
-      if (!response.ok) {
-        throw new Error(`Error del servidor: ${response.status}`);
-      }
+    if (!response.ok) {
+      throw new Error(`Error del servidor: ${response.status}`);
+    }
 
-      const data = await response.json();
-      
-      // Verificar si hubo un error en el análisis
-      if (data.error) {
-        setResults({ 
-          error: data.error,
-          filename: file.name,
-          pages: 0,
-          text_preview: '',
-          success: false
-        });
-      } else {
-        setResults(data);
-      }
-    } catch (error) {
-      console.error('Error completo:', error);
+    const data = await response.json();
+    
+    if (data.error) {
       setResults({ 
-        error: error instanceof Error ? error.message : 'Error al conectar con el servidor. Verifica que el backend esté corriendo.',
+        error: data.error,
         filename: file.name,
         pages: 0,
         text_preview: '',
         success: false
       });
-    } finally {
-      setAnalyzing(false);
+    } else {
+      setResults(data);
     }
-  };
+  } catch (error) {
+    console.error('Error completo:', error);
+    setResults({ 
+      error: error instanceof Error ? error.message : 'Error al conectar con el servidor.',
+      filename: file.name,
+      pages: 0,
+      text_preview: '',
+      success: false
+    });
+  } finally {
+    setAnalyzing(false);
+  }
+};
 
   const getDocumentIcon = (type: string | null) => {
     if (!type) return FileText;
