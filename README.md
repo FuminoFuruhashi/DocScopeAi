@@ -77,8 +77,6 @@ GEMINI_API_KEY=tu_api_key_de_gemini
 NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
 ```
 
-Para producción, cambia la URL del backend por tu URL desplegada.
-
 ##  Deploy
 
 ### Backend (Render)
